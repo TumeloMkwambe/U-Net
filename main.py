@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 class Encoder(nn.Module):
     def __init__(self, input_channels, output_channels):
@@ -27,12 +28,17 @@ class Decoder(nn.Module):
 
     def forward(self, decoder_feature_bank, encoder_feature_bank):
         
-        if decoder_feature_bank.shape[2] != encoder_feature_bank.shape[2] or decoder_feature_bank.shape[3] != encoder_feature_bank.shape[3]:
-            raise ValueError("incompatible shapes for skip connection")
-        else:
-            feature_bank = torch.cat([decoder_feature_bank, encoder_feature_bank], dim = 1)
-            feature_bank = self.block(feature_bank)
-            return feature_bank
+        if decoder_feature_bank.shape[2:] != encoder_feature_bank.shape[2:]:
+            decoder_feature_bank = F.interpolate(
+                decoder_feature_bank, 
+                size=encoder_feature_bank.shape[2:], 
+                mode='bilinear', 
+                align_corners=False
+            )
+        
+        feature_bank = torch.cat([decoder_feature_bank, encoder_feature_bank], dim = 1)
+        feature_bank = self.block(feature_bank)
+        return feature_bank
 
 class U_Net(nn.Module):
     def __init__(self):
