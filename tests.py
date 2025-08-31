@@ -20,4 +20,3 @@ def check_mask_layers(img, layer = 0):
     plt.colorbar()
     plt.title("Mask Visualization")
     plt.show()
-
