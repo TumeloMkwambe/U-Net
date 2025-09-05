@@ -9,16 +9,26 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def metrics(masks, predictions):
+    '''
+    Only computes metrics for foreground pixels (positives).
+    '''
 
     predictions = np.concatenate(predictions).flatten()
     masks = np.concatenate(masks).flatten()
+    class_ = 1
 
     accuracy = accuracy_score(masks, predictions)
-    precision = precision_score(masks, predictions, average = 'weighted', zero_division = 0)
-    recall = recall_score(masks, predictions, average = 'weighted', zero_division = 0)
-    f1 = f1_score(masks, predictions, average = 'weighted', zero_division = 0)
+    precision = precision_score(masks, predictions, average = 'binary', pos_label = class_, zero_division = 0)
+    recall = recall_score(masks, predictions, average = 'binary', pos_label = class_, zero_division = 0)
+    f1 = f1_score(masks, predictions, average = 'binary', pos_label = class_, zero_division = 0)
 
-    return accuracy, precision, recall, f1
+    actual_positives = (masks == class_)
+    predicted_positives = (predictions == class_)
+    intersection = np.logical_and(actual_positives, predicted_positives).sum()
+    union = np.logical_or(actual_positives, predicted_positives).sum()
+    iou = intersection / union if union > 0 else 0.0
+
+    return accuracy, precision, recall, f1, iou
 
 def performance_report(model, data, batch_size, device):
 
@@ -44,9 +54,9 @@ def performance_report(model, data, batch_size, device):
             masks.append(mask.cpu().numpy())
 
     average_loss = total_loss / len(dataloader)
-    accuracy, precision, recall, f1 = metrics(masks, predictions)
+    accuracy, precision, recall, f1, iou = metrics(masks, predictions)
 
-    return average_loss, accuracy, precision, recall, f1
+    return average_loss, accuracy, precision, recall, f1, iou
 
 def training_loop(model, training_data, validation_data, run_name, batch = 1, learning_rate = 1e-2, num_epochs = 10, device = "cpu"):
 
@@ -54,7 +64,7 @@ def training_loop(model, training_data, validation_data, run_name, batch = 1, le
     dataloader = DataLoader(dataset, batch_size = batch, shuffle = True)
 
     model = model.to(device)
-    best_val_loss = float("inf")
+    best_iou = 0.0
     best_model_state = None
 
     loss_function = nn.CrossEntropyLoss()
@@ -82,7 +92,7 @@ def training_loop(model, training_data, validation_data, run_name, batch = 1, le
             total_loss += loss.item()
 
         train_loss = total_loss / len(dataloader)
-        val_loss, accuracy, precision, recall, f1 = performance_report(model, validation_data, batch, device)
+        val_loss, accuracy, precision, recall, f1, iou = performance_report(model, validation_data, batch, device)
 
         wandb.log({
             'Training Loss': train_loss,
@@ -90,11 +100,12 @@ def training_loop(model, training_data, validation_data, run_name, batch = 1, le
             'Validation Accuracy': accuracy,
             'Validation Precision': precision,
             'Validation Recall': recall,
-            'Validation F1': f1
+            'Validation F1': f1,
+            'Validation IoU': iou
         })
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if best_iou < iou:
+            best_iou = iou
             best_model_state = copy.deepcopy(model.state_dict())
 
         '''
@@ -110,7 +121,7 @@ def training_loop(model, training_data, validation_data, run_name, batch = 1, le
 
         print(f'Epoch: {epoch}')
         print(f'Training | Loss: {train_loss}')
-        print(f"Validation | Loss: {val_loss} | Accuracy: {accuracy} | Precision: {precision} | Recall: {recall} | F1: {f1} \n")        
+        print(f"Validation | Loss: {val_loss} | IoU: {iou} | Accuracy: {accuracy} | Precision: {precision} | Recall: {recall} | F1: {f1} \n")        
 
     wandb.finish()
 
