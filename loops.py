@@ -38,6 +38,7 @@ def performance_report(model, data, batch_size, device):
     total_loss = 0.0
     predictions = []
     masks = []
+    model = model.to(device)
     model.eval()
 
     with torch.no_grad():
