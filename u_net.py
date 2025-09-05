@@ -37,7 +37,7 @@ class DecoderBlock(nn.Module):
         super().__init__()
 
         if bilinear:
-            self.upSampling = nn.UpSample(scale_factor = 2, mode = 'bilinear')
+            self.upSampling = nn.Upsample(scale_factor = 2, mode = 'bilinear')
         else:
             self.upSampling = nn.ConvTranspose2d(in_channels, out_channels, kernel_size = 2, stride = 2)
 
